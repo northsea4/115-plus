@@ -71,6 +71,7 @@
   interface VideoItem {
     name: string;
     code: string;
+    size?: number;
     url?: string;
     time?: number;
   }
@@ -78,6 +79,7 @@
   interface ForderVideo {
     n: string;
     pc: string;
+    s?: number;
   }
 
   interface ForderFile {
@@ -205,6 +207,7 @@
           videoList.value.push({
             name: file.name,
             code: file.code,
+            size: file.size,
           });
         }
       }
@@ -235,6 +238,7 @@
         return {
           name: item.n,
           code: item.pc,
+          size: item.s,
         };
       });
       bc.postMessage({

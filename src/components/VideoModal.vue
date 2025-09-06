@@ -1,20 +1,70 @@
 <template>
   <NModal
     v-model:show="show"
-    style="width: 60%"
+    style="width: 70%"
     title="视频播放"
     preset="card"
     :bordered="false"
+    :draggable="true"
     @after-leave="handleVideoClose"
   >
     <NLayout has-sider :content-style="layoutHeightStyle">
       <NLayoutSider :native-scrollbar="false" bordered>
-        <NMenu
-          v-model:value="menuValue"
-          :options="menuOptions"
-          :theme-overrides="menuThemeOverrides"
-          @update:value="handleMenuUpdate"
-        />
+        <!-- 筛选器区域 -->
+        <div class="filter-section">
+          <NInput
+            v-model:value="searchText"
+            placeholder="搜索视频..."
+            size="small"
+            clearable
+            class="search-input"
+          >
+            <template #prefix>
+              <NIcon><SearchOutlined /></NIcon>
+            </template>
+          </NInput>
+
+          <div class="sort-controls">
+            <NSelect
+              v-model:value="sortBy"
+              :options="sortOptions"
+              size="small"
+              placeholder="排序方式"
+              class="sort-select"
+            />
+          </div>
+
+          <!-- <NCheckbox v-model:checked="hideWatched" size="small" class="hide-watched-checkbox">
+            隐藏已观看
+          </NCheckbox> -->
+        </div>
+
+        <NList hoverable clickable>
+          <NListItem
+            v-for="(video, index) in filteredVideoList"
+            :key="video.code"
+            :class="{ 'selected-video': currentVideoCode === video.code }"
+            @click="handleVideoClick(video)"
+          >
+            <NThing content-style="margin-top: 10px;">
+              <template #description>
+                <NSpace size="small" style="margin-top: 4px">
+                  <NTag :bordered="false" type="info" size="small"> # {{ index + 1 }} </NTag>
+                  <NTag v-if="video.size" :bordered="false" type="success" size="small">
+                    {{ formatFileSize(video.size || 0) }}
+                  </NTag>
+                </NSpace>
+              </template>
+
+              <NTooltip trigger="hover">
+                <template #trigger>
+                  {{ video.name }}
+                </template>
+                {{ video.name }}
+              </NTooltip>
+            </NThing>
+          </NListItem>
+        </NList>
       </NLayoutSider>
       <NLayout :native-scrollbar="false">
         <div ref="videoRef" class="video-js"></div>
@@ -24,18 +74,19 @@
 </template>
 
 <script setup lang="ts">
-  import Player from 'xgplayer';
+  import Player, { type IPlayerOptions } from 'xgplayer';
   import 'xgplayer/dist/index.min.css';
   import HlsJsPlugin from 'xgplayer-hls.js';
   import { Events } from 'xgplayer';
-  import type { MenuOption } from 'naive-ui';
-  import { request, settings } from '@/utils';
-  import { menuThemeOverrides } from '@/utils/theme';
+  import { SearchOutlined } from '@vicons/antd';
+  import { request, settings, formatFileSize } from '@/utils';
 
   /** 视频项接口定义 */
   interface VideoItem {
     name: string;
     code: string;
+    size?: number;
+    suffix?: string;
     url?: string;
     time?: number;
   }
@@ -67,13 +118,26 @@
   const message = useMessage();
 
   // 响应式数据
-  const menuOptions = ref<MenuOption[]>([]);
-  const menuValue = ref<string>('');
   const videoList = ref<VideoItem[]>([]);
   const videoRef = ref<HTMLElement | null>(null);
   const player = ref<Player | null>(null);
   const layoutHeight = ref<number>(700);
   const currentVideo = ref<VideoItem | null>(null);
+  const currentVideoCode = ref<string>('');
+
+  // 筛选相关的响应式数据
+  const searchText = ref<string>('');
+  const sortBy = ref<string>('name-asc');
+
+  // 排序选项
+  const sortOptions = [
+    { label: '按名称排序 △', value: 'name-asc' },
+    { label: '按名称排序 ▽', value: 'name-desc' },
+    { label: '按添加顺序 △', value: 'order-asc' },
+    { label: '按添加顺序 ▽', value: 'order-desc' },
+    { label: '按文件大小 △', value: 'size-asc' },
+    { label: '按文件大小 ▽', value: 'size-desc' },
+  ];
 
   // 使用 VueUse 的 useIntervalFn 来管理定时保存播放进度
   const { pause: pauseSaveTimer, resume: resumeSaveTimer } = useIntervalFn(
@@ -101,7 +165,52 @@
     volume: settings?.video.volume ?? 1,
     defaultPlaybackRate: settings?.video.defaultPlaybackRate ?? 1,
     enableHistory: settings?.video.history ?? true,
+    autoNext: settings?.video.autoNext ?? true,
   }));
+
+  // 筛选后的视频列表
+  const filteredVideoList = computed(() => {
+    let filteredVideos = [...videoList.value];
+
+    // 按搜索文本筛选
+    if (searchText.value.trim()) {
+      const searchTerm = searchText.value.toLowerCase().trim();
+      filteredVideos = filteredVideos.filter((video) =>
+        video.name.toLowerCase().includes(searchTerm),
+      );
+    }
+
+    // 解析排序方式和方向
+    const [sortType, sortDirection] = sortBy.value.split('-') as [string, 'asc' | 'desc'];
+
+    // 排序
+    switch (sortType) {
+      case 'name':
+        filteredVideos.sort((a, b) => {
+          const result = a.name.localeCompare(b.name);
+          return sortDirection === 'asc' ? result : -result;
+        });
+        break;
+      case 'size':
+        // 按实际文件大小排序
+        filteredVideos.sort((a, b) => {
+          const sizeA = a.size || 0;
+          const sizeB = b.size || 0;
+          const result = sizeA - sizeB;
+          return sortDirection === 'asc' ? result : -result;
+        });
+        break;
+      case 'order':
+      default:
+        // 保持原有顺序或反转
+        if (sortDirection === 'desc') {
+          filteredVideos.reverse();
+        }
+        break;
+    }
+
+    return filteredVideos;
+  });
 
   // 监听器
   watch(show, (value) => {
@@ -136,12 +245,6 @@
    */
   const play = async (): Promise<void> => {
     try {
-      // 构建菜单选项
-      menuOptions.value = videoList.value.map((item) => ({
-        label: item.name,
-        key: item.code,
-      }));
-
       const firstVideo = videoList.value[0];
       if (!firstVideo) {
         throw new Error('视频列表为空');
@@ -158,7 +261,8 @@
    * 设置视频播放所需数据
    */
   const setupVideoForPlay = async (video: VideoItem): Promise<void> => {
-    menuValue.value = video.code;
+    currentVideoCode.value = video.code;
+
     video.url = await getVideoUrl(video.code);
     video.time = videoSettings.value.enableHistory ? (await getVideoHistory(video.code)) || 0 : 0;
   };
@@ -171,14 +275,14 @@
       throw new Error('播放器容器或视频URL不可用');
     }
 
-    const baseConfig = {
+    const baseConfig: IPlayerOptions = {
       el: videoRef.value,
       url: video.url,
       autoplay: videoSettings.value.autoplay,
       fluid: true,
       volume: videoSettings.value.volume,
       defaultPlaybackRate: videoSettings.value.defaultPlaybackRate,
-      playbackRate: { list: [5, 4, 3, 2, 1.5, 1.25, 1, 0.75, 0.5] },
+      playbackRate: { list: [5, 4, 3, 2, 1.5, 1.25, 1, 0.75, 0.5, 0.25, 0.1] },
       rotate: true,
       pip: true,
       dynamicBg: { disable: false },
@@ -217,6 +321,11 @@
     // 监听视频尺寸变化
     player.value.on(Events.VIDEO_RESIZE, () => {
       layoutHeight.value = videoRef.value?.clientHeight || 700;
+    });
+
+    // 监听视频播放结束事件
+    player.value.on(Events.ENDED, () => {
+      handleVideoEnded();
     });
   };
 
@@ -292,6 +401,28 @@
   };
 
   /**
+   * 处理视频项点击
+   */
+  const handleVideoClick = async (video: VideoItem): Promise<void> => {
+    try {
+      if (!player.value) {
+        throw new Error('播放器未初始化');
+      }
+
+      currentVideoCode.value = video.code;
+
+      // 如果视频URL未缓存，则获取
+      if (!video.url) {
+        await setupVideoForPlay(video);
+      }
+
+      await switchVideo(video);
+    } catch (error) {
+      handleError('视频切换失败', error);
+    }
+  };
+
+  /**
    * 处理错误信息
    */
   const handleError = (title: string, error: unknown): void => {
@@ -310,29 +441,41 @@
   };
 
   /**
-   * 处理菜单选择更新
+   * 获取下一个视频
    */
-  const handleMenuUpdate = async (value: string): Promise<void> => {
+  const getNextVideo = (): VideoItem | null => {
+    const currentIndex = filteredVideoList.value.findIndex(
+      (video) => video.code === currentVideoCode.value,
+    );
+    
+    if (currentIndex === -1 || currentIndex >= filteredVideoList.value.length - 1) {
+      return null; // 没有下一个视频
+    }
+    
+    return filteredVideoList.value[currentIndex + 1] || null;
+  };
+
+  /**
+   * 处理视频播放结束
+   */
+  const handleVideoEnded = async (): Promise<void> => {
     try {
-      if (!player.value) {
-        throw new Error('播放器未初始化');
+      // 检查是否启用自动播放下一个视频
+      if (!videoSettings.value.autoNext) {
+        message.info('视频播放完成');
+        return;
       }
 
-      const videoIndex = videoList.value.findIndex((item) => item.code === value);
-      const currentVideo = videoList.value[videoIndex];
-
-      if (!currentVideo) {
-        throw new Error('找不到对应的视频');
+      const nextVideo = getNextVideo();
+      
+      if (nextVideo) {
+        message.info(`正在播放下一个视频：${nextVideo.name}`);
+        await handleVideoClick(nextVideo);
+      } else {
+        message.success('所有视频播放完成');
       }
-
-      // 如果视频URL未缓存，则获取
-      if (!currentVideo.url) {
-        await setupVideoForPlay(currentVideo);
-      }
-
-      await switchVideo(currentVideo);
     } catch (error) {
-      handleError('视频切换失败', error);
+      handleError('自动播放下一个视频失败', error);
     }
   };
 
@@ -357,4 +500,61 @@
   };
 </script>
 
-<style scoped></style>
+<style lang="scss" scoped>
+  .filter-section {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding: 8px 8px 1px 8px;
+    background-color: var(--n-color);
+
+    .search-input {
+      margin-bottom: 8px;
+    }
+
+    .sort-controls {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+      align-items: center;
+
+      .sort-select {
+        flex: 1;
+      }
+    }
+
+    .n-input,
+    .n-select {
+      font-size: 12px;
+    }
+  }
+
+  :deep(.n-list) {
+    padding: 4px;
+  }
+
+  /* NList项的悬停效果 */
+  :deep(.n-list .n-list-item) {
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 2px 0;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+
+    &:hover {
+      background-color: var(--n-color-hover) !important;
+    }
+
+    /* 选中的视频项样式 */
+    &.selected-video {
+      background-color: var(--n-color) !important;
+      border-radius: 4px;
+      color: #f40;
+
+      .n-thing-header__title {
+        color: var(--n-primary-color) !important;
+        font-weight: 600;
+      }
+    }
+  }
+</style>
