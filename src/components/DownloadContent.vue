@@ -128,6 +128,7 @@
           code: item.getAttribute('pick_code') as string,
           cateId: (item.getAttribute('cate_id') as string) || '',
           fileMode: (item.getAttribute('file_mode') as string) || '',
+          size: Number(item.getAttribute('file_size')) || 0,
         });
       }
     });

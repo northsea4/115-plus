@@ -233,6 +233,29 @@
   };
 
   /**
+   * 判断视频是否接近播放完成
+   * @param currentTime 当前播放时间（秒）
+   * @param duration 视频总时长（秒）
+   * @param threshold 阈值（秒），默认为30秒
+   * @returns 是否接近播放完成
+   */
+  const isVideoNearlyCompleted = (
+    currentTime: number,
+    duration: number,
+    threshold: number = 30,
+  ): boolean => {
+    if (duration <= 0 || currentTime <= 0) return false;
+
+    // 如果视频总时长小于阈值，则认为播放到80%以上就算接近完成
+    if (duration < threshold) {
+      return currentTime / duration >= 0.8;
+    }
+
+    // 如果剩余时间小于阈值，则认为接近完成
+    return duration - currentTime <= threshold;
+  };
+
+  /**
    * 初始化视频列表
    */
   const initializeVideoList = (): void => {
@@ -245,7 +268,7 @@
    */
   const play = async (): Promise<void> => {
     try {
-      const firstVideo = videoList.value[0];
+      const firstVideo = filteredVideoList.value[0];
       if (!firstVideo) {
         throw new Error('视频列表为空');
       }
@@ -312,12 +335,6 @@
   const setupPlayerEvents = (video: VideoItem): void => {
     if (!player.value) return;
 
-    // 设置视频历史记录
-    if (videoSettings.value.enableHistory && video.time) {
-      player.value.currentTime = video.time;
-      startSaveTimer(video);
-    }
-
     // 监听视频尺寸变化
     player.value.on(Events.VIDEO_RESIZE, () => {
       layoutHeight.value = videoRef.value?.clientHeight || 700;
@@ -327,6 +344,33 @@
     player.value.on(Events.ENDED, () => {
       handleVideoEnded();
     });
+
+    // 监听视频元数据加载完成事件，设置历史播放位置
+    if (videoSettings.value.enableHistory && video.time && video.time > 1) {
+      player.value.once(Events.LOADED_METADATA, () => {
+        if (!player.value) return;
+
+        const duration = player.value.duration;
+        const isNearlyCompleted = isVideoNearlyCompleted(video.time || 0, duration);
+
+        if (!isNearlyCompleted) {
+          // 如果视频没有接近播放完成，则从历史位置开始播放
+          player.value.currentTime = video.time || 0;
+
+          // 提示用户从历史播放位置开始播放
+          const timeText = formatTime(video.time || 0);
+          message.info(`从上次播放位置开始：${timeText}`);
+        } else {
+          // 如果接近播放完成，则从头开始播放，给出提示
+          message.info('视频已接近播放完成，从头开始播放');
+        }
+      });
+    }
+
+    // 启动保存计时器
+    if (videoSettings.value.enableHistory) {
+      startSaveTimer(video);
+    }
   };
 
   /**
@@ -416,6 +460,7 @@
         await setupVideoForPlay(video);
       }
 
+      // 用户主动点击视频时，使用历史播放时间（会自动判断是否接近播放完成）
       await switchVideo(video);
     } catch (error) {
       handleError('视频切换失败', error);
@@ -447,12 +492,35 @@
     const currentIndex = filteredVideoList.value.findIndex(
       (video) => video.code === currentVideoCode.value,
     );
-    
+
     if (currentIndex === -1 || currentIndex >= filteredVideoList.value.length - 1) {
       return null; // 没有下一个视频
     }
-    
+
     return filteredVideoList.value[currentIndex + 1] || null;
+  };
+
+  /**
+   * 自动播放下一个视频（由视频播放结束触发）
+   */
+  const autoPlayNextVideo = async (video: VideoItem): Promise<void> => {
+    try {
+      if (!player.value) {
+        throw new Error('播放器未初始化');
+      }
+
+      currentVideoCode.value = video.code;
+
+      // 如果视频URL未缓存，则获取
+      if (!video.url) {
+        await setupVideoForPlay(video);
+      }
+
+      // 自动播放下一个视频时，使用历史播放时间（会自动判断是否接近播放完成）
+      await switchVideo(video);
+    } catch (error) {
+      handleError('自动播放视频失败', error);
+    }
   };
 
   /**
@@ -467,10 +535,10 @@
       }
 
       const nextVideo = getNextVideo();
-      
+
       if (nextVideo) {
         message.info(`正在播放下一个视频：${nextVideo.name}`);
-        await handleVideoClick(nextVideo);
+        await autoPlayNextVideo(nextVideo);
       } else {
         message.success('所有视频播放完成');
       }
@@ -480,9 +548,25 @@
   };
 
   /**
-   * 切换视频
+   * 格式化时间为 MM:SS 或 HH:MM:SS 格式
    */
-  const switchVideo = async (video: VideoItem): Promise<void> => {
+  const formatTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  /**
+   * 切换视频
+   * @param video 要切换到的视频
+   * @param useHistoryTime 是否使用历史播放时间，默认为true
+   */
+  const switchVideo = async (video: VideoItem, useHistoryTime: boolean = true): Promise<void> => {
     if (!player.value || !video.url) return;
 
     stopSaveTimer();
@@ -493,8 +577,31 @@
       player.value.play();
     }
 
-    if (videoSettings.value.enableHistory && video.time) {
-      player.value.currentTime = video.time;
+    // 判断是否需要设置历史播放时间
+    if (useHistoryTime && videoSettings.value.enableHistory && video.time && video.time > 1) {
+      // 等待视频元数据加载完成后再判断是否接近播放完成
+      player.value.once(Events.LOADED_METADATA, () => {
+        if (!player.value) return;
+
+        const duration = player.value.duration;
+        const isNearlyCompleted = isVideoNearlyCompleted(video.time || 0, duration);
+
+        if (!isNearlyCompleted) {
+          // 如果视频没有接近播放完成，则从历史位置开始播放
+          player.value.currentTime = video.time || 0;
+
+          // 提示用户从历史播放位置开始播放
+          const timeText = formatTime(video.time || 0);
+          message.info(`从上次播放位置开始：${timeText}`);
+        } else {
+          // 如果接近播放完成，则从头开始播放，给出提示
+          message.info('视频已接近播放完成，从头开始播放');
+        }
+
+        startSaveTimer(video);
+      });
+    } else if (videoSettings.value.enableHistory) {
+      // 即使不使用历史时间，也要启动保存计时器
       startSaveTimer(video);
     }
   };
