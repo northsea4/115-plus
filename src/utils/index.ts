@@ -5,6 +5,7 @@ export interface FileItem {
   name: string;
   isDir: boolean;
   code: string;
+  size?: number;
   cateId?: string;
   fileMode?: string;
 }
@@ -299,6 +300,7 @@ export interface Settings {
     defaultPlaybackRate: number;
     autoplay: boolean;
     history: boolean;
+    autoNext: boolean;
   };
   darkMode: {
     enable: boolean;
@@ -348,4 +350,42 @@ export const request = (req: Req): Promise<ResponseType> => {
       },
     });
   });
+};
+
+/**
+ * 格式化文件大小
+ * @param bytes 字节数
+ * @param decimals 小数位数，默认2位
+ * @returns 格式化后的文件大小字符串
+ */
+export const formatFileSize = (bytes?: number, decimals = 2): string => {
+  if (!bytes || bytes === 0) return '0 B';
+
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
+/**
+ * 获取文件名和后缀
+ * @param fileName 文件名
+ * @returns 包含文件名和后缀的对象
+ */
+export const getNameAndSuffix = (fileName: string) => {
+  const lastDotIndex = fileName.lastIndexOf('.');
+  if (lastDotIndex === -1) {
+    return {
+      name: fileName,
+      suffix: '',
+    };
+  } else {
+    return {
+      name: fileName.substring(0, lastDotIndex),
+      suffix: fileName.substring(lastDotIndex + 1),
+    };
+  }
 };

@@ -71,6 +71,7 @@
   interface VideoItem {
     name: string;
     code: string;
+    size?: number;
     url?: string;
     time?: number;
   }
@@ -78,6 +79,7 @@
   interface ForderVideo {
     n: string;
     pc: string;
+    s?: number;
   }
 
   interface ForderFile {
@@ -126,6 +128,7 @@
           code: item.getAttribute('pick_code') as string,
           cateId: (item.getAttribute('cate_id') as string) || '',
           fileMode: (item.getAttribute('file_mode') as string) || '',
+          size: Number(item.getAttribute('file_size')) || 0,
         });
       }
     });
@@ -205,6 +208,7 @@
           videoList.value.push({
             name: file.name,
             code: file.code,
+            size: file.size,
           });
         }
       }
@@ -235,6 +239,7 @@
         return {
           name: item.n,
           code: item.pc,
+          size: item.s,
         };
       });
       bc.postMessage({
@@ -251,7 +256,7 @@
   const getForderVideos = async (cid: string) => {
     const res = await request({
       method: 'GET',
-      url: `https://115vod.com/aps/natsort/files.php?aid=1&cid=${cid}&offset=0&limit=1150&show_dir=0&nf=&qid=0&type=4&source=&format=json&star=&is_q=&is_share=&r_all=1&o=file_name&asc=1&cur=1&natsort=1`,
+      url: `https://aps.115.com/natsort/files.php?aid=1&cid=${cid}&offset=0&limit=1150&show_dir=0&nf=&qid=0&type=4&source=&format=json&star=&is_q=&is_share=&r_all=1&o=file_name&asc=1&cur=1&natsort=1`,
     });
     if (res.status === 200) {
       const json = JSON.parse(res.responseText);

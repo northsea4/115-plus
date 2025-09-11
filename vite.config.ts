@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  server: {
+    open: false,
+  },
   plugins: [
     vue(),
     vueJsx(),

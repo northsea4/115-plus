@@ -80,6 +80,9 @@
                 <NFormItem label="自动播放" path="video.autoplay">
                   <NSwitch v-model:value="settingsRef.video.autoplay" />
                 </NFormItem>
+                <NFormItem label="自动播放下一个" path="video.autoNext">
+                  <NSwitch v-model:value="settingsRef.video.autoNext" />
+                </NFormItem>
                 <NFormItem label="同步播放进度" path="video.history">
                   <NSwitch v-model:value="settingsRef.video.history" />
                 </NFormItem>
@@ -141,6 +144,7 @@
         defaultPlaybackRate: 1,
         autoplay: true,
         history: true,
+        autoNext: true,
       },
       darkMode: {
         enable: false,
