@@ -56,7 +56,7 @@
                     v-model:value="settingsRef.video.volume"
                     :step="0.01"
                     :max="1"
-                    :format-tooltip="(v) => `${(v * 100).toFixed(0)}%`"
+                    :format-tooltip="(v: number) => `${(v * 100).toFixed(0)}%`"
                   />
                 </NFormItem>
                 <NFormItem label="默认速度" path="video.defaultPlaybackRate">
