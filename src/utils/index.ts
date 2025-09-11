@@ -1,5 +1,4 @@
-import CryptoJS from 'crypto-js';
-import bigInt from 'big-integer';
+import { MD5 } from 'crypto-es';
 
 export interface FileItem {
   name: string;
@@ -21,7 +20,6 @@ const gKts = [
 ];
 const gKeyS = [0x29, 0x23, 0x21, 0x5e];
 const gKeyL = [120, 6, 173, 76, 51, 134, 93, 24, 76, 1, 63, 70];
-const md5 = CryptoJS.MD5;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -66,7 +64,7 @@ export const getDownLoadUrl = async (code: string) => {
 };
 
 const m115Encode = (code: string, time: number) => {
-  const key = stringToBytes(md5(`!@###@#${time}DFDR@#@#`).toString());
+  const key = stringToBytes(MD5(`!@###@#${time}DFDR@#@#`).toString());
   const bytes = stringToBytes(code);
   const tmp1 = m115SymEncode(bytes, bytes.length, key);
   const tmp2 = key.slice(0, 16).concat(tmp1);
@@ -187,11 +185,25 @@ const bytesToString = (b: number[]) => {
 };
 
 const RSA = () => {
-  const n = bigInt(
-    '8686980c0f5a24c4b9d43020cd2c22703ff3f450756529058b1cf88f09b8602136477198a6e2683149659bd122c33592fdb5ad47944ad1ea4d36c6b172aad6338c3bb6ac6227502d010993ac967d1aef00f0c8e038de2e4d3bc2ec368af2e9f10a6f1eda4f7262f136420c07c331b871bf139f74f3010e3c4fe57df3afb71683',
-    16,
+  const n = BigInt(
+    '0x8686980c0f5a24c4b9d43020cd2c22703ff3f450756529058b1cf88f09b8602136477198a6e2683149659bd122c33592fdb5ad47944ad1ea4d36c6b172aad6338c3bb6ac6227502d010993ac967d1aef00f0c8e038de2e4d3bc2ec368af2e9f10a6f1eda4f7262f136420c07c331b871bf139f74f3010e3c4fe57df3afb71683',
   );
-  const e = bigInt('10001', 16);
+  const e = BigInt('0x10001');
+
+  // 实现模幂运算 (base^exponent) % modulus
+  const modPow = (base: bigint, exponent: bigint, modulus: bigint): bigint => {
+    if (modulus === 1n) return 0n;
+    let result = 1n;
+    base = base % modulus;
+    while (exponent > 0n) {
+      if (exponent % 2n === 1n) {
+        result = (result * base) % modulus;
+      }
+      exponent = exponent >> 1n;
+      base = (base * base) % modulus;
+    }
+    return result;
+  };
 
   const pkcs1pad2 = (s: string, n: number) => {
     if (n < s.length + 11) {
@@ -209,10 +221,10 @@ const RSA = () => {
     ba[--n] = 2;
     ba[--n] = 0;
     const c = a2hex(ba);
-    return bigInt(c, 16);
+    return BigInt('0x' + c);
   };
 
-  const pkcs1unpad2 = (a: bigInt.BigInteger) => {
+  const pkcs1unpad2 = (a: bigint) => {
     let b = a.toString(16);
     if (b.length % 2 !== 0) {
       b = '0' + b;
@@ -253,7 +265,7 @@ const RSA = () => {
     if (m === null) {
       return null;
     }
-    let h = m.modPow(e, n).toString(16);
+    let h = modPow(m, e, n).toString(16);
     while (h.length < 0x80 * 2) {
       h = '0' + h;
     }
@@ -267,7 +279,7 @@ const RSA = () => {
       ba[i] = text.charCodeAt(i);
       i += 1;
     }
-    const c = bigInt(a2hex(ba), 16).modPow(e, n);
+    const c = modPow(BigInt('0x' + a2hex(ba)), e, n);
     const d = pkcs1unpad2(c);
     return d;
   };

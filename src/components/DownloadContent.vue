@@ -164,7 +164,9 @@
           });
         }
       }
-
+      nextTick(() => {
+        loading.destroy();
+      });
       if (downloads.value.length === 0) {
         message.error('获取文件信息失败');
       } else {
@@ -173,8 +175,6 @@
     } catch (error) {
       console.error(error);
       message.error(`获取信息失败，错误信息：${error}`);
-    } finally {
-      loading.destroy();
     }
   };
 
@@ -270,7 +270,7 @@
         }
       }
     } else {
-      throw new Error('请先打开一次官方视频播放器页面');
+      throw new Error('获取文件夹文件失败');
     }
   };
 

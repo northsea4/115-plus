@@ -36,7 +36,7 @@ export default defineConfig({
         match: ['https://115.com/*'],
         name: '115+',
         description: '为115网盘添加一些功能',
-        connect: ['115.com', '115vod.com'],
+        connect: ['115.com'],
         supportURL: 'https://github.com/lvzhenbo/115-plus/issues',
       },
       build: {
@@ -47,8 +47,6 @@ export default defineConfig({
           'naive-ui': cdn.jsdelivr('naive', 'dist/index.prod.js'),
           xgplayer: cdn.jsdelivr('Player', 'dist/index.min.js'),
           'xgplayer-hls.js': cdn.jsdelivr('HlsJsPlugin', 'dist/index.min.js'),
-          'big-integer': cdn.jsdelivr('bigInt', 'BigInteger.min.js'),
-          'crypto-js': cdn.jsdelivr('CryptoJS', 'crypto-js.min.js'),
         },
       },
     }),
