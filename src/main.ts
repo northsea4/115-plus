@@ -52,6 +52,16 @@ if (settings) {
     };
     flag = true;
   }
+  if (typeof settings.video.autoSkipFailed !== 'boolean') {
+    newSettings = {
+      ...newSettings,
+      video: {
+        ...settings.video,
+        autoSkipFailed: true,
+      },
+    };
+    flag = true;
+  }
   GM_setValue('settings', newSettings);
   if (flag) {
     message.loading('115+ 功能更新中，即将刷新页面……');

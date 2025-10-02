@@ -53,6 +53,12 @@
                   <NTag v-if="video.size" :bordered="false" type="success" size="small">
                     {{ formatFileSize(video.size || 0) }}
                   </NTag>
+                  <NTooltip v-if="video.playFailed" trigger="hover">
+                    <template #trigger>
+                      <NTag :bordered="false" type="error" size="small">错误</NTag>
+                    </template>
+                    {{ video.error || '视频播放失败' }}
+                  </NTooltip>
                 </NSpace>
               </template>
 
@@ -89,6 +95,8 @@
     suffix?: string;
     url?: string;
     time?: number;
+    playFailed?: boolean;
+    error?: string;
   }
 
   /** API响应类型 */
@@ -166,6 +174,7 @@
     defaultPlaybackRate: settings?.video.defaultPlaybackRate ?? 1,
     enableHistory: settings?.video.history ?? true,
     autoNext: settings?.video.autoNext ?? true,
+    autoSkipFailed: settings?.video.autoSkipFailed ?? true,
   }));
 
   // 筛选后的视频列表
@@ -264,19 +273,60 @@
   };
 
   /**
-   * 开始播放第一个视频
+   * 开始播放第一个可用的视频
    */
   const play = async (): Promise<void> => {
     try {
-      const firstVideo = filteredVideoList.value[0];
-      if (!firstVideo) {
+      if (filteredVideoList.value.length === 0) {
         throw new Error('视频列表为空');
       }
 
-      await setupVideoForPlay(firstVideo);
-      await createPlayer(firstVideo);
+      // 尝试播放第一个可用的视频
+      let playSuccess = false;
+      for (let i = 0; i < filteredVideoList.value.length; i++) {
+        const video = filteredVideoList.value[i];
+        if (!video) continue;
+
+        try {
+          await setupVideoForPlay(video);
+          await createPlayer(video);
+          playSuccess = true;
+          break;
+        } catch (error) {
+          console.warn(`视频 ${video.name} 播放失败:`, error);
+
+          player.value?.destroy();
+          player.value = null;
+
+          // 如果不自动跳过失败视频，直接抛出错误
+          if (!videoSettings.value.autoSkipFailed) {
+            throw error;
+          }
+
+          // 如果不是最后一个视频，继续尝试下一个
+          if (i < filteredVideoList.value.length - 1) {
+            message.warning(`视频 ${video.name} 播放失败，正在尝试下一个视频`);
+            continue;
+          }
+          // 如果是最后一个视频也失败了，抛出错误
+          throw error;
+        }
+      }
+
+      if (!playSuccess) {
+        throw new Error('所有视频都无法播放');
+      }
     } catch (error) {
       handleError('视频播放失败', error);
+    }
+  };
+
+  /**
+   * 检查播放器是否可用，如果不可用则重新初始化
+   */
+  const ensurePlayerExists = async (video: VideoItem): Promise<void> => {
+    if (!player.value || !videoRef.value) {
+      await createPlayer(video);
     }
   };
 
@@ -286,8 +336,18 @@
   const setupVideoForPlay = async (video: VideoItem): Promise<void> => {
     currentVideoCode.value = video.code;
 
-    video.url = await getVideoUrl(video.code);
-    video.time = videoSettings.value.enableHistory ? (await getVideoHistory(video.code)) || 0 : 0;
+    try {
+      video.url = await getVideoUrl(video.code);
+      video.time = videoSettings.value.enableHistory ? (await getVideoHistory(video.code)) || 0 : 0;
+      // 清除之前的错误状态
+      video.playFailed = false;
+      video.error = undefined;
+    } catch (error) {
+      // 设置失败状态
+      video.playFailed = true;
+      video.error = error instanceof Error ? error.message : String(error);
+      throw error; // 依然抛出错误，供上层处理
+    }
   };
 
   /**
@@ -358,8 +418,9 @@
           player.value.currentTime = video.time || 0;
 
           // 提示用户从历史播放位置开始播放
-          const timeText = formatTime(video.time || 0);
-          message.info(`从上次播放位置开始：${timeText}`);
+          // TODO 如果之前的视频失败，点击播放正常视频时，会有两个提示
+          // const timeText = formatTime(video.time || 0);
+          // message.info(`从上次播放位置开始：${timeText}`);
         } else {
           // 如果接近播放完成，则从头开始播放，给出提示
           message.info('视频已接近播放完成，从头开始播放');
@@ -449,20 +510,27 @@
    */
   const handleVideoClick = async (video: VideoItem): Promise<void> => {
     try {
-      if (!player.value) {
-        throw new Error('播放器未初始化');
+      // 如果视频之前失败过，重新尝试
+      if (video.playFailed) {
+        message.info(`重新尝试播放视频：${video.name}`);
       }
 
       currentVideoCode.value = video.code;
 
-      // 如果视频URL未缓存，则获取
-      if (!video.url) {
+      // 如果视频URL未缓存或之前失败过，则重新获取
+      if (!video.url || video.playFailed) {
         await setupVideoForPlay(video);
       }
+
+      // 确保播放器存在，如果不存在则重新创建
+      await ensurePlayerExists(video);
 
       // 用户主动点击视频时，使用历史播放时间（会自动判断是否接近播放完成）
       await switchVideo(video);
     } catch (error) {
+      player.value?.destroy();
+      player.value = null;
+
       handleError('视频切换失败', error);
     }
   };
@@ -505,20 +573,28 @@
    */
   const autoPlayNextVideo = async (video: VideoItem): Promise<void> => {
     try {
-      if (!player.value) {
-        throw new Error('播放器未初始化');
-      }
-
       currentVideoCode.value = video.code;
 
-      // 如果视频URL未缓存，则获取
-      if (!video.url) {
+      // 如果视频URL未缓存或之前失败过，则重新获取
+      if (!video.url || video.playFailed) {
         await setupVideoForPlay(video);
       }
+
+      // 确保播放器存在，如果不存在则重新创建
+      await ensurePlayerExists(video);
 
       // 自动播放下一个视频时，使用历史播放时间（会自动判断是否接近播放完成）
       await switchVideo(video);
     } catch (error) {
+      // 如果自动播放失败且开启了自动跳过，尝试播放下一个
+      if (videoSettings.value.autoSkipFailed) {
+        const nextVideo = getNextVideo();
+        if (nextVideo) {
+          message.warning(`视频 ${video.name} 播放失败，正在尝试下一个视频`);
+          await autoPlayNextVideo(nextVideo);
+          return;
+        }
+      }
       handleError('自动播放视频失败', error);
     }
   };

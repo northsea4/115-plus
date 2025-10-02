@@ -83,6 +83,9 @@
                 <NFormItem label="自动播放下一个" path="video.autoNext">
                   <NSwitch v-model:value="settingsRef.video.autoNext" />
                 </NFormItem>
+                <NFormItem label="自动跳过失败视频" path="video.autoSkipFailed">
+                  <NSwitch v-model:value="settingsRef.video.autoSkipFailed" />
+                </NFormItem>
                 <NFormItem label="同步播放进度" path="video.history">
                   <NSwitch v-model:value="settingsRef.video.history" />
                 </NFormItem>
@@ -145,6 +148,7 @@
         autoplay: true,
         history: true,
         autoNext: true,
+        autoSkipFailed: true,
       },
       darkMode: {
         enable: false,

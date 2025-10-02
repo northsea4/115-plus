@@ -313,6 +313,7 @@ export interface Settings {
     autoplay: boolean;
     history: boolean;
     autoNext: boolean;
+    autoSkipFailed: boolean;
   };
   darkMode: {
     enable: boolean;
