@@ -6,11 +6,15 @@ import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { NaiveUiResolver } from 'unplugin-vue-components/resolvers';
 import { fileURLToPath } from 'node:url';
+import pkg from './package.json';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   server: {
     open: false,
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
   },
   plugins: [
     vue(),

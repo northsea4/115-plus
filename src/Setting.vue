@@ -23,6 +23,11 @@
           closable
           @close="handleClose"
         >
+          <template #header-extra>
+            <div style="margin-right: 20px">
+              <NTag type="info" size="small">v{{ version }}</NTag>
+            </div>
+          </template>
           <NTabs type="segment" animated>
             <NTabPane name="functionSwitch" tab="功能开关">
               <NForm ref="formRef" label-placement="left" label-width="auto" :show-feedback="false">
@@ -123,6 +128,7 @@
   import { buttonThemeOverrides } from '@/utils/theme';
   import { SettingOutlined } from '@vicons/antd';
 
+  const version = __APP_VERSION__;
   const showSetting = ref(false);
   const theme = useTheme();
   const settingsRef = ref<Settings>(
