@@ -62,12 +62,9 @@
                 </NSpace>
               </template>
 
-              <NTooltip trigger="hover">
-                <template #trigger>
-                  {{ video.name }}
-                </template>
+              <NEllipsis style="max-width: 100%">
                 {{ video.name }}
-              </NTooltip>
+              </NEllipsis>
             </NThing>
           </NListItem>
         </NList>
@@ -738,6 +735,13 @@
         color: var(--n-primary-color) !important;
         font-weight: 600;
       }
+    }
+
+    .n-list-item__main {
+      width: 100%;
+    }
+    .n-thing-main {
+      width: 100%;
     }
   }
 </style>
