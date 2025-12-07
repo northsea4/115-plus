@@ -402,6 +402,11 @@
       handleVideoEnded();
     });
 
+    player.value.on(Events.ERROR, (e) => {
+      console.error('播放器错误事件:', e);
+      message.error(`视频播放出错：${e.message || '未知错误'}`);
+    });
+
     // 监听视频元数据加载完成事件，设置历史播放位置
     if (videoSettings.value.enableHistory && video.time && video.time > 1) {
       player.value.once(Events.LOADED_METADATA, () => {
